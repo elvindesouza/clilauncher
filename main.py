@@ -2,6 +2,7 @@
 import os
 import subprocess
 import shutil
+import re
 from subprocess import PIPE
 
 
@@ -57,7 +58,7 @@ def extract_desktop_entry_info(file_path):
                     elif line.startswith("Keywords="):
                         entry_info["keywords"] = line.split("=", 1)[1]
                     elif line.startswith("Exec="):
-                        entry_info["exec"] = line.split("=", 1)[1]
+                        entry_info["exec"] = re.sub(r'%.', '', line.split("=", 1)[1])
                     elif line.startswith("NoDisplay=true"):
                         entry_info["nodisplay"] = True
 
@@ -65,6 +66,7 @@ def extract_desktop_entry_info(file_path):
         print(f"Error extracting information from {file_path}: {e}")
 
     return entry_info
+
 
 def main():
     desktop_files = list_desktop_files()
@@ -101,7 +103,7 @@ def main():
             try:
                 exec_command = selected_entry.get("exec", "")
                 if exec_command:
-                    subprocess.run(exec_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    subprocess.run(f'{exec_command} &', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 else:
                     print(f"Error: 'Exec' not found in {selected_entry['file_path']}")
             except Exception as e:
