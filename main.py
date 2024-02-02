@@ -1,17 +1,64 @@
 #!/usr/bin/env python3
+"""
+Program Name: clilauncher (nokludge)
+Description: A Python script for launching desktop applications with fuzzy search and action support.
+Author: Elvin deSouza
+Copyright (c) 2024 Elvin deSouza
+License: GPL License (see LICENSE file for details)
+"""
+
+import logging
 import os
 import re
 import shutil
 import subprocess
 from subprocess import PIPE
 
+logging.basicConfig(
+    level=logging.INFO,  # INFO, DEBUG, WARNING, ERROR
+    format="%(levelname)s: %(message)s",
+)
 
-def list_desktop_files():
+
+def dependencies_installed_check() -> bool:
+    """
+    Description: Checks if required dependencies (dex and gio) are installed.
+    Returns: True if at least one dependency is installed, otherwise False.
+    """
+    global _DEX_INSTALLED
+    global _GIO_INSTALLED
+    _DEX_INSTALLED = True if shutil.which("dex") else False
+    _GIO_INSTALLED = True if shutil.which("gio") else False
+    if not _DEX_INSTALLED:
+        logging.warning(
+            "dex is not installed, you can install it at https://github.com/jceb/dex. while it is not required, "
+            "please install it if you experience buggy behaviour"
+        )
+    if not _GIO_INSTALLED:
+        logging.warning(
+            "gio from glib2 is not installed. while it is not required, please install it if you experience buggy "
+            "behaviour"
+        )
+    return _GIO_INSTALLED or _GIO_INSTALLED
+
+
+def list_desktop_files() -> list[str]:
+    """
+    Description: Retrieves a list of desktop files from standard locations.
+    Returns: List of file paths for desktop entries.
+    """
     desktop_files = []
+    # you can add custom locations for .desktop files to the end
     locations = [
         "/usr/share/applications/",
         "/usr/local/share/applications/",
         os.path.expanduser("~/.local/share/applications/"),
+        os.path.expanduser("~/.local/share/flatpak/exports/share/applications"),
+        "/var/lib/snapd/desktop/applications/",
+        os.path.expanduser("~/snap/*/current/.local/share/applications/"),
+        "/var/lib/flatpak/exports/share/applications/",
+        "/media/elvin/extra/Flatpak/flatpak/exports/share/applications/",
+        "/media/elvin/dHDD/Flatpak/flatpak/exports/share/applications/",
     ]
 
     for location in locations:
@@ -27,10 +74,14 @@ def list_desktop_files():
     return desktop_files
 
 
-def extract_desktop_entry_info(file_path):
+def extract_desktop_entry_info(file_path: str):
+    """
+    Description: Extracts information from a desktop entry file.
+    Parameters:  file_path (str): Path to the desktop entry file.
+    Returns: List of dictionaries containing entry details.
+    """
     entry_info_list = []  # List to store multiple entries, including Desktop Actions
     current_entry = None  # Current entry being processed
-    current_actions = []  # List to store multiple actions for a single entry
     try:
         with open(file_path, "r") as desktop_file:
             for line in desktop_file:
@@ -45,19 +96,22 @@ def extract_desktop_entry_info(file_path):
                             "keywords": "",
                             "exec": "",
                             "nodisplay": False,
-                            "file_path": "",
+                            "file_path": file_path,
+                            "is_action": False,
                         }
                         entry_info_list.append(current_entry)
+                        application_name = ""  # Reset application name for each entry
                         continue
                     elif section_name.startswith("Desktop Action "):
                         current_entry = {
-                            "name": current_entry["name"] + " ",
+                            "name": application_name + " ",
                             "comment": "",
                             "generic_name": "",
                             "keywords": "",
                             "exec": "",
                             "nodisplay": False,
-                            "file_path": "",
+                            "file_path": file_path,
+                            "is_action": True,
                         }
                         entry_info_list.append(current_entry)
                         continue
@@ -66,16 +120,14 @@ def extract_desktop_entry_info(file_path):
                 elif current_entry:
                     if line.startswith("Name="):
                         if current_entry["name"]:
-                            current_entry["name"] = (
-                                    current_entry["name"]
-                                    + "("
-                                    + line.split("=", 1)[1]
-                                    + ")"
-                            )
+                            current_entry[
+                                "name"
+                            ] = f"{current_entry['name']} ({line.split('=', 1)[1]})"
                         else:
                             current_entry["name"] = line.split("=", 1)[1]
 
-                        print(current_entry["name"])
+                        if not current_entry["is_action"]:
+                            application_name = current_entry["name"]
                     elif line.startswith("Comment="):
                         current_entry["comment"] = line.split("=", 1)[1]
                     elif line.startswith("GenericName="):
@@ -88,7 +140,7 @@ def extract_desktop_entry_info(file_path):
                         current_entry["nodisplay"] = True
 
     except Exception as e:
-        print(f"Error extracting information from {file_path}: {e}")
+        logging.error(f"Error extracting information from {file_path}: {e}")
 
     return entry_info_list
 
@@ -100,17 +152,16 @@ def main():
     for file in desktop_files:
         entries_info.extend(extract_desktop_entry_info(file))
 
-    # Filter entries without 'NoDisplay' before creating entries_display
+    # Entries without 'NoDisplay' are not shown in menu
     entries_info = [entry for entry in entries_info if not entry["nodisplay"]]
 
     entries_display = []
     for entry in entries_info:
         if "Desktop Action" in entry["file_path"]:
-            # Process entries with [Desktop Action <action name>] section
-            action_name = entry["file_path"].split(" ")[-1][:-1]  # Extract action name
+            # [Desktop Action <action name>]
+            action_name = entry["file_path"].split(" ")[-1][:-1]
             entry_name = f"{entry['name']}({action_name})"
         else:
-            # Process regular Desktop Entry section
             entry_name = entry["name"]
 
         entries_display.append(
@@ -124,7 +175,6 @@ def main():
         fzf_input = "\n".join(entries_display)
         selected_entry_display, _ = fzf_process.communicate(input=fzf_input)
 
-    # Extract the selected application path
     selected_entry = next(
         (
             entry
@@ -135,36 +185,38 @@ def main():
         None,
     )
 
-    if selected_entry:
-        if shutil.which("dex"):
-            print(selected_entry.get("exec", ""))
-            # subprocess.run(
-            #     ["dex", selected_entry["file_path"]],
-            #     stdout=subprocess.DEVNULL,
-            #     stderr=subprocess.DEVNULL,
-            # )
-        elif shutil.which("gio"):
-            print()
-            # subprocess.run(
-            #     ["gio", "open", selected_entry["file_path"]],
-            #     stdout=subprocess.DEVNULL,
-            #     stderr=subprocess.DEVNULL,
-            # )
-        else:
-            try:
-                exec_command = selected_entry.get("exec", "")
-                if exec_command:
-                    # subprocess.run(
-                    #     f"{exec_command} &",
-                    #     shell=True,
-                    #     stdout=subprocess.DEVNULL,
-                    #     stderr=subprocess.DEVNULL,
-                    # )
-                    print()
-                else:
-                    print(f"Error: 'Exec' not found in {selected_entry['file_path']}")
-            except Exception as e:
-                print(f"Error running application: {e}")
+    if not selected_entry:
+        return
+    if selected_entry["is_action"] or not dependencies_installed_check():
+        try:
+            logging.warning("Using experimental method")
+            exec_command = selected_entry.get("exec", "")
+            if exec_command:
+                subprocess.run(
+                    f"{exec_command} &",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                logging.error(
+                    f"Error: 'Exec' not found in {selected_entry['file_path']}"
+                )
+        except Exception as e:
+            logging.error(f"Error running application: {e}")
+        return
+    if _GIO_INSTALLED:
+        subprocess.run(
+            ["dex", selected_entry["file_path"]],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    elif _DEX_INSTALLED:
+        subprocess.run(
+            ["gio", "open", selected_entry["file_path"]],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 if __name__ == "__main__":
