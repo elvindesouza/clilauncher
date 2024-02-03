@@ -10,7 +10,6 @@ License: GPL License (see LICENSE file for details)
 import logging
 import os
 import re
-import shutil
 import subprocess
 from subprocess import PIPE
 
@@ -18,28 +17,6 @@ logging.basicConfig(
     level=logging.INFO,  # INFO, DEBUG, WARNING, ERROR
     format="%(levelname)s: %(message)s",
 )
-
-
-def dependencies_installed_check() -> bool:
-    """
-    Description: Checks if required dependencies (dex and gio) are installed.
-    Returns: True if at least one dependency is installed, otherwise False.
-    """
-    global _DEX_INSTALLED
-    global _GIO_INSTALLED
-    _DEX_INSTALLED = True if shutil.which("dex") else False
-    _GIO_INSTALLED = True if shutil.which("gio") else False
-    if not _DEX_INSTALLED:
-        logging.warning(
-            "dex is not installed, you can install it at https://github.com/jceb/dex. while it is not required, "
-            "please install it if you experience buggy behaviour"
-        )
-    if not _GIO_INSTALLED:
-        logging.warning(
-            "gio from glib2 is not installed. while it is not required, please install it if you experience buggy "
-            "behaviour"
-        )
-    return _GIO_INSTALLED or _GIO_INSTALLED
 
 
 def list_desktop_files() -> list[str]:
@@ -116,7 +93,7 @@ def extract_desktop_entry_info(file_path: str):
                         entry_info_list.append(current_entry)
                         continue
                     else:
-                        break  # Stop reading once relevant sections are processed
+                        break
                 elif current_entry:
                     if line.startswith("Name="):
                         if current_entry["name"]:
@@ -147,7 +124,7 @@ def extract_desktop_entry_info(file_path: str):
 
 def main():
     desktop_files = list_desktop_files()
-    entries_info = []  # Modified to store all entries in a single list
+    entries_info = []
 
     for file in desktop_files:
         entries_info.extend(extract_desktop_entry_info(file))
@@ -187,36 +164,19 @@ def main():
 
     if not selected_entry:
         return
-    if selected_entry["is_action"] or not dependencies_installed_check():
-        try:
-            logging.warning("Using experimental method")
-            exec_command = selected_entry.get("exec", "")
-            if exec_command:
-                subprocess.run(
-                    f"{exec_command} &",
-                    shell=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            else:
-                logging.error(
-                    f"Error: 'Exec' not found in {selected_entry['file_path']}"
-                )
-        except Exception as e:
-            logging.error(f"Error running application: {e}")
-        return
-    if _GIO_INSTALLED:
-        subprocess.run(
-            ["dex", selected_entry["file_path"]],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    elif _DEX_INSTALLED:
-        subprocess.run(
-            ["gio", "open", selected_entry["file_path"]],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    try:
+        exec_command = selected_entry.get("exec", "")
+        if exec_command:
+            subprocess.run(
+                f"{exec_command} &",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            logging.error(f"Error: 'Exec' not found in {selected_entry['file_path']}")
+    except Exception as e:
+        logging.error(f"Error running application: {e}")
 
 
 if __name__ == "__main__":
