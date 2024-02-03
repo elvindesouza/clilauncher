@@ -9,8 +9,8 @@ License: GPL License (see LICENSE file for details)
 
 import logging
 import os
-import re
 import subprocess
+from re import sub
 from subprocess import PIPE
 
 logging.basicConfig(
@@ -112,7 +112,7 @@ def extract_desktop_entry_info(file_path: str):
                     elif line.startswith("Keywords="):
                         current_entry["keywords"] = line.split("=", 1)[1]
                     elif line.startswith("Exec="):
-                        current_entry["exec"] = re.sub(r"%.", "", line.split("=", 1)[1])
+                        current_entry["exec"] = sub(r"%.", "", line.split("=", 1)[1])
                     elif line.startswith("NoDisplay=true"):
                         current_entry["nodisplay"] = True
 
@@ -147,7 +147,7 @@ def main():
 
     # Use fzf for searching and selection
     with subprocess.Popen(
-            ["fzf"], stdin=PIPE, stdout=PIPE, universal_newlines=True
+        ["fzf"], stdin=PIPE, stdout=PIPE, universal_newlines=True
     ) as fzf_process:
         fzf_input = "\n".join(entries_display)
         selected_entry_display, _ = fzf_process.communicate(input=fzf_input)
@@ -157,7 +157,7 @@ def main():
             entry
             for entry in entries_info
             if selected_entry_display.strip()
-               == f"{entry['name']}{' - ' + entry['comment'] if entry['comment'] else ''}{' - ' + entry['generic_name'] if entry['generic_name'] else ''}{' - ' + entry['keywords'] if entry['keywords'] else ''}"
+            == f"{entry['name']}{' - ' + entry['comment'] if entry['comment'] else ''}{' - ' + entry['generic_name'] if entry['generic_name'] else ''}{' - ' + entry['keywords'] if entry['keywords'] else ''}"
         ),
         None,
     )
