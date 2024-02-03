@@ -19,8 +19,7 @@ It needed to have a filter-as-you-type search, Ctrl+j and Ctrl+k navigation in t
 - FZF (Fuzzy Finder) - using your package manager (`sudo apt-get install fzf`, `brew install fzf`, etc.), or from https://github.com/junegunn/fzf
 
 ## Optional Dependencies
-- [gio](https://developer.gnome.org/gio/stable/) - Install either, to avoid potential buggy behaviour
-- [dex](https://github.com/jceb/dex) - Install either, to avoid potential buggy behaviour
+Does not depend on gio or dex, use the version on `master` if needed
 
 ## Usage
 1. Run `main.py`
@@ -28,13 +27,12 @@ It needed to have a filter-as-you-type search, Ctrl+j and Ctrl+k navigation in t
 3. Launch the selected application or action.
 
 ## Setup
-1. Clone the repository: `git clone https://github.com/yourusername/clilauncher.git`
-2. Navigate to the cloned directory: `cd clilauncher`
-3. Make the script executable: `chmod +x clilauncher.py`
-4. Run the script: `./clilauncher.py`
+1. Clone the repository
+2. Rename the script and move it to a directory on $PATH
+3. Make the script executable: `chmod +x main.py`
+4. Run the script: `./main.py`
 
 ## Known Issues
-- Dependency on FZF- it might be possible to use the menu system in your shell(like zsh) as a replacement, but I see no point in programming with such a convoluted system.
 - Experimental method for launching applications without `dex` or `gio` fetches the Exec line from the .desktop file and omits the substitution variables, it is possible that it fails to launch an application correctly. It is very unlikely, though.
 
 ## Author
